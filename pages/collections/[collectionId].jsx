@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
 import { useWeb3 } from "@3rdweb/hooks";
 import { client } from "../../lib/sanityClient";
 import { ThirdwebSDK } from "@3rdweb/sdk";
-import Header from "../../components/Header";
 import { CgWebsite } from "react-icons/cg";
 import { AiOutlineInstagram, AiOutlineTwitter } from "react-icons/ai";
 import { HiDotsVertical } from "react-icons/hi";
+
 import NFTCard from "../../components/NFTCard";
+import Header from "../../components/Header";
+import Link from "next/link";
 
 const style = {
   bannerImageContainer: `h-[20vh] w-screen overflow-hidden flex justify-center items-center`,
@@ -34,6 +35,69 @@ const style = {
 
 const Collection = () => {
   const router = useRouter();
+  const { provider } = useWeb3();
+  const { collectionId } = router.query;
+  const [collection, setCollection] = useState({});
+  const [nfts, setNfts] = useState([]);
+  const [listings, setListings] = useState([]);
+
+  const marketPlaceModule = useMemo(() => {
+    if (!provider) return;
+
+    const sdk = new ThirdwebSDK(provider.getSigner());
+
+    return sdk.getMarketplaceModule(
+      process.env.NEXT_PUBLIC_NFT_MARKETPLACE_ADDRESS
+    );
+  }, [provider]);
+
+  const nftModule = useMemo(() => {
+    if (!provider) return;
+
+    const sdk = new ThirdwebSDK(provider.getSigner());
+
+    return sdk.getNFTModule(collectionId);
+  }, [provider]);
+
+  // Get all listings inside marketplace
+  useEffect(() => {
+    if (!marketPlaceModule) return;
+
+    (async () => {
+      setListings(await marketPlaceModule.getAllListings());
+    })();
+  }, [marketPlaceModule]);
+
+  // Get all NFTs
+  useEffect(() => {
+    if (!nftModule) return;
+    (async () => {
+      const nfts = await nftModule.getAll();
+
+      setNfts(nfts);
+    })();
+  }, [nftModule]);
+
+  const fetchCollectionData = async (sanityClient = client) => {
+    const query = `*[_type == "marketItems" && contractAddress == "${collectionId}" ] {
+      "imageUrl": profileImage.asset->url,
+      "bannerImageUrl": bannerImage.asset->url,
+      volumeTraded,
+      createdBy,
+      contractAddress,
+      "creator": createdBy->userName,
+      title, floorPrice,
+      "allOwners": owners[]->,
+      description
+    }`;
+    const collectionData = await sanityClient.fetch(query);
+
+    await setCollection(collectionData[0]);
+  };
+
+  useEffect(() => {
+    fetchCollectionData();
+  }, [collectionId]);
 
   return (
     <div className="overflow-hidden">
